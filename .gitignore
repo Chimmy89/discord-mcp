@@ -48,3 +48,6 @@ AGENTS.md
 ai-docs/
 issues/
 wiki/
+
+# Personal automation logs
+.upstream-check.log
