@@ -7,6 +7,7 @@ import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
+import net.dv8tion.jda.api.requests.restaction.pagination.PinnedMessagePaginationAction;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Value;
@@ -131,6 +132,90 @@ public class MessageService {
         }
         messageById.delete().queue();
         return "Message deleted successfully";
+    }
+
+    /**
+     * Pins a message in a Discord channel. Channels have a limit of 50 pinned messages.
+     *
+     * @param channelId The ID of the channel containing the message.
+     * @param messageId The ID of the message to pin.
+     * @return A confirmation message with a link to the pinned message.
+     */
+    @Tool(name = "pin_message", description = "Pin a message in a channel. Discord limits each channel to 50 pinned messages.")
+    public String pinMessage(@ToolParam(description = "Discord channel ID") String channelId,
+                             @ToolParam(description = "Specific message ID") String messageId) {
+        if (channelId == null || channelId.isEmpty()) {
+            throw new IllegalArgumentException("channelId cannot be null");
+        }
+        if (messageId == null || messageId.isEmpty()) {
+            throw new IllegalArgumentException("messageId cannot be null");
+        }
+
+        MessageChannel channel = getMessageChannelById(channelId);
+        if (channel == null) {
+            throw new IllegalArgumentException("Channel not found by channelId");
+        }
+        Message messageById = channel.retrieveMessageById(messageId).complete();
+        if (messageById == null) {
+            throw new IllegalArgumentException("Message not found by messageId");
+        }
+        messageById.pin().complete();
+        return "Message pinned successfully. Message link: " + messageById.getJumpUrl();
+    }
+
+    /**
+     * Unpins a message in a Discord channel.
+     *
+     * @param channelId The ID of the channel containing the message.
+     * @param messageId The ID of the message to unpin.
+     * @return A confirmation message.
+     */
+    @Tool(name = "unpin_message", description = "Unpin a previously pinned message in a channel")
+    public String unpinMessage(@ToolParam(description = "Discord channel ID") String channelId,
+                               @ToolParam(description = "Specific message ID") String messageId) {
+        if (channelId == null || channelId.isEmpty()) {
+            throw new IllegalArgumentException("channelId cannot be null");
+        }
+        if (messageId == null || messageId.isEmpty()) {
+            throw new IllegalArgumentException("messageId cannot be null");
+        }
+
+        MessageChannel channel = getMessageChannelById(channelId);
+        if (channel == null) {
+            throw new IllegalArgumentException("Channel not found by channelId");
+        }
+        Message messageById = channel.retrieveMessageById(messageId).complete();
+        if (messageById == null) {
+            throw new IllegalArgumentException("Message not found by messageId");
+        }
+        messageById.unpin().complete();
+        return "Message unpinned successfully. Message link: " + messageById.getJumpUrl();
+    }
+
+    /**
+     * Lists pinned messages in a Discord channel.
+     *
+     * @param channelId The ID of the channel.
+     * @return A formatted string of pinned messages, oldest first.
+     */
+    @Tool(name = "get_pinned_messages", description = "List all pinned messages in a channel. Useful before pinning to see what's already there or before unpinning to find the right message ID.")
+    public String getPinnedMessages(@ToolParam(description = "Discord channel ID") String channelId) {
+        if (channelId == null || channelId.isEmpty()) {
+            throw new IllegalArgumentException("channelId cannot be null");
+        }
+
+        MessageChannel channel = getMessageChannelById(channelId);
+        if (channel == null) {
+            throw new IllegalArgumentException("Channel not found by channelId");
+        }
+        List<Message> pinned = channel.retrievePinnedMessages().complete().stream()
+                .map(PinnedMessagePaginationAction.PinnedMessage::getMessage)
+                .toList();
+        if (pinned.isEmpty()) {
+            return "No pinned messages in this channel.";
+        }
+        List<String> formatted = formatMessages(pinned);
+        return "**Found " + pinned.size() + " pinned message(s):** \n" + String.join("\n", formatted);
     }
 
     /**
